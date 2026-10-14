@@ -4,7 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import type { ImportItem, LinkRecord, NoteRecord, Snapshot } from "./preload";
+import type { BranchRecord, ImportItem, LinkRecord, NoteRecord, Snapshot } from "./preload";
 
 const UNASSIGNED = "Unassigned";
 const projectRootName = "Projects";
@@ -161,8 +161,7 @@ function noteRecords(): NoteRecord[] {
           tags: Array.isArray(data.tags) ? data.tags.filter((tag): tag is string => typeof tag === "string") : [],
           status: data.status === "Completed" || data.status === "Archived" ? data.status : "Active",
           workItemId: typeof data.workItemId === "string" ? data.workItemId : "",
-          branch: typeof data.branch === "string" ? data.branch : "",
-          baseBranch: typeof data.baseBranch === "string" ? data.baseBranch : "",
+          branches: parseBranches(data),
           prs: parseLinks(data.prs),
           docs: parseLinks(data.docs),
           createdAt: typeof data.createdAt === "string" ? data.createdAt : fs.statSync(fullPath).birthtime.toISOString(),
@@ -203,8 +202,7 @@ function noteRecords(): NoteRecord[] {
         tags: Array.isArray(data.tags) ? data.tags.filter((tag): tag is string => typeof tag === "string") : [],
         status: data.status === "Completed" || data.status === "Archived" ? data.status : "Active",
         workItemId: typeof data.workItemId === "string" ? data.workItemId : "",
-        branch: typeof data.branch === "string" ? data.branch : "",
-        baseBranch: typeof data.baseBranch === "string" ? data.baseBranch : "",
+        branches: parseBranches(data),
         prs: parseLinks(data.prs),
         docs: parseLinks(data.docs),
         createdAt: typeof data.createdAt === "string" ? data.createdAt : fs.statSync(fullPath).birthtime.toISOString(),
@@ -237,6 +235,23 @@ function parseLinks(value: unknown): LinkRecord[] {
   });
 }
 
+// Older notes store a single `branch`/`baseBranch` pair; newer ones store a `branches` list.
+function parseBranches(data: Record<string, unknown>): BranchRecord[] {
+  if (Array.isArray(data.branches)) {
+    return data.branches.flatMap((branch) => {
+      if (typeof branch === "string") return [{ name: branch, from: "" }];
+      if (!branch || typeof branch !== "object") return [];
+      const item = branch as Record<string, unknown>;
+      return typeof item.name === "string"
+        ? [{ name: item.name, from: typeof item.from === "string" ? item.from : "" }]
+        : [];
+    });
+  }
+  const name = typeof data.branch === "string" ? data.branch : "";
+  const from = typeof data.baseBranch === "string" ? data.baseBranch : "";
+  return name || from ? [{ name, from }] : [];
+}
+
 function getSnapshot(): Snapshot {
   if (!libraryRoot) throw new Error("Choose a library folder first.");
   const notes = noteRecords();
@@ -260,8 +275,7 @@ function makeNoteFile(note: NoteRecord) {
     tags: note.tags,
     status: note.status,
     workItemId: note.workItemId,
-    branch: note.branch,
-    baseBranch: note.baseBranch,
+    branches: note.branches,
     prs: note.prs,
     docs: note.docs,
     createdAt: note.createdAt,
@@ -395,8 +409,7 @@ function registerHandlers() {
       tags: [],
       status: "Active",
       workItemId: "",
-      branch: "",
-      baseBranch: "",
+      branches: [],
       prs: [],
       docs: [],
       createdAt: now.toISOString(),
@@ -495,7 +508,7 @@ function registerHandlers() {
       const title = path.basename(item.path, path.extname(item.path));
       const note: NoteRecord = {
         id, title, project: item.project, type: "", tags: [], status: "Active",
-        workItemId: "", branch: "", baseBranch: "", prs: [], docs: [],
+        workItemId: "", branches: [], prs: [], docs: [],
         createdAt: date.toISOString(), updatedAt: date.toISOString(),
         body: fs.readFileSync(item.path, "utf8"), path: "", deleted: false,
         fileNameMismatch: false,
