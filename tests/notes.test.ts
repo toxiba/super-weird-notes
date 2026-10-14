@@ -13,8 +13,8 @@ import {
   removeEmptyDirectories,
   safeName,
   titleSlug,
-} from "../electron/notes";
-import type { NoteRecord } from "../electron/preload";
+} from "../electron/library/notes";
+import type { NoteRecord } from "../electron/types";
 
 const id = "1234abcd-0000-4000-8000-000000000000";
 

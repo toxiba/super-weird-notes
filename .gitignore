@@ -149,3 +149,5 @@ vite.config.ts.timestamp-*
 .turbo
 
 .DS_Store
+# Compiled Electron code (built from electron/ by npm run build)
+dist-electron

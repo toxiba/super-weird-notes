@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import type { BranchRecord, LinkRecord, NoteRecord } from "./preload";
+import type { BranchRecord, LinkRecord, NoteRecord } from "../types";
 
 export function safeName(value: string) {
   const trimmed = value.trim().replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-");
