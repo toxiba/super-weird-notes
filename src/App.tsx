@@ -77,8 +77,8 @@ const emptySnapshot: Snapshot = {
 
 function sameContent(a: NoteRecord, b: NoteRecord) {
   return a.title === b.title && a.project === b.project && a.type === b.type &&
-    a.status === b.status && a.workItemId === b.workItemId && a.branch === b.branch &&
-    a.baseBranch === b.baseBranch && a.body === b.body &&
+    a.status === b.status && a.workItemId === b.workItemId && a.body === b.body &&
+    JSON.stringify(a.branches) === JSON.stringify(b.branches) &&
     JSON.stringify(a.tags) === JSON.stringify(b.tags) &&
     JSON.stringify(a.prs) === JSON.stringify(b.prs) &&
     JSON.stringify(a.docs) === JSON.stringify(b.docs);
@@ -410,7 +410,7 @@ function App() {
       if (!query) return true;
       const haystack = [
         note.title, note.body, note.project, note.type, note.status, note.workItemId,
-        note.branch, note.baseBranch, ...note.tags,
+        ...note.branches.flatMap((branch) => [branch.name, branch.from]), ...note.tags,
         ...note.prs.flatMap((link) => [link.label, link.url]),
         ...note.docs.flatMap((link) => [link.label, link.url]),
       ].join(" ").toLocaleLowerCase();
@@ -967,6 +967,10 @@ function MetadataEditor({ note, projects, knownTags, readOnly, onOpenExternal, o
     onChange({ [field]: links });
   };
   const removeLink = (field: LinkField, index: number) => onChange({ [field]: note[field].filter((_item, i) => i !== index) });
+  const addBranch = () => onChange({ branches: [...note.branches, { name: "", from: "" }] });
+  const editBranch = (index: number, key: "name" | "from", value: string) =>
+    onChange({ branches: note.branches.map((item, i) => i === index ? { ...item, [key]: value } : item) });
+  const removeBranch = (index: number) => onChange({ branches: note.branches.filter((_item, i) => i !== index) });
   const addTag = () => {
     const tag = tagInput.trim().replace(/^#/, "");
     if (tag && !note.tags.includes(tag)) onChange({ tags: [...note.tags, tag] });
@@ -980,12 +984,10 @@ function MetadataEditor({ note, projects, knownTags, readOnly, onOpenExternal, o
       <label className="field-label">AZURE WORK ITEM
         <input disabled={readOnly} value={note.workItemId} onChange={(event) => onChange({ workItemId: event.target.value })} placeholder="e.g. 123456" />
       </label>
-      <label className="field-label">BRANCH
-        <input disabled={readOnly} value={note.branch} onChange={(event) => onChange({ branch: event.target.value })} placeholder="feature/my-branch" />
-      </label>
-      <label className="field-label">FROM BRANCH
-        <input disabled={readOnly} value={note.baseBranch} onChange={(event) => onChange({ baseBranch: event.target.value })} placeholder="main" />
-      </label>
+      <div className="branch-fields">
+        <div className="field-label link-title">BRANCHES<button disabled={readOnly} onClick={addBranch}>＋ Add</button></div>
+        {note.branches.map((branch, index) => <div className="link-row" key={`branch-${index}`}><input disabled={readOnly} value={branch.name} onChange={(event) => editBranch(index, "name", event.target.value)} placeholder="feature/my-branch" /><input disabled={readOnly} value={branch.from} onChange={(event) => editBranch(index, "from", event.target.value)} placeholder="From branch, e.g. main" /><button disabled={readOnly} onClick={() => removeBranch(index)} title="Remove branch">×</button></div>)}
+      </div>
       <div className="field-label tags-field">TAGS
         <div className="tags-input">{note.tags.map((tag) => <button className="tag-chip" key={tag} disabled={readOnly} onClick={() => onChange({ tags: note.tags.filter((item) => item !== tag) })}>{tag} ×</button>)}<input disabled={readOnly} value={tagInput} list="existing-tags" onChange={(event) => setTagInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addTag(); } }} onBlur={addTag} placeholder="Add tag…" /><datalist id="existing-tags">{knownTags.map((tag) => <option key={tag}>{tag}</option>)}</datalist></div>
       </div>

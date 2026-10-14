@@ -257,8 +257,7 @@ function registerHandlers() {
             tags: [],
             status: "Active",
             workItemId: "",
-            branch: "",
-            baseBranch: "",
+            branches: [],
             prs: [],
             docs: [],
             createdAt: now.toISOString(),
@@ -366,7 +365,7 @@ function registerHandlers() {
             const title = node_path_1.default.basename(item.path, node_path_1.default.extname(item.path));
             const note = {
                 id, title, project: item.project, type: "", tags: [], status: "Active",
-                workItemId: "", branch: "", baseBranch: "", prs: [], docs: [],
+                workItemId: "", branches: [], prs: [], docs: [],
                 createdAt: date.toISOString(), updatedAt: date.toISOString(),
                 body: node_fs_1.default.readFileSync(item.path, "utf8"), path: "", deleted: false,
                 fileNameMismatch: false,

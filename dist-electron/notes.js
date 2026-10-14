@@ -9,6 +9,7 @@ exports.safeReadDir = safeReadDir;
 exports.removeEmptyDirectories = removeEmptyDirectories;
 exports.filesIn = filesIn;
 exports.parseLinks = parseLinks;
+exports.parseBranches = parseBranches;
 exports.makeNoteFile = makeNoteFile;
 exports.parseNoteFile = parseNoteFile;
 exports.titleSlug = titleSlug;
@@ -71,6 +72,24 @@ function parseLinks(value) {
             : [];
     });
 }
+// Older notes store a single `branch`/`baseBranch` pair; newer ones store a `branches` list.
+function parseBranches(data) {
+    if (Array.isArray(data.branches)) {
+        return data.branches.flatMap((branch) => {
+            if (typeof branch === "string")
+                return [{ name: branch, from: "" }];
+            if (!branch || typeof branch !== "object")
+                return [];
+            const item = branch;
+            return typeof item.name === "string"
+                ? [{ name: item.name, from: typeof item.from === "string" ? item.from : "" }]
+                : [];
+        });
+    }
+    const name = typeof data.branch === "string" ? data.branch : "";
+    const from = typeof data.baseBranch === "string" ? data.baseBranch : "";
+    return name || from ? [{ name, from }] : [];
+}
 function makeNoteFile(note) {
     const metadata = {
         id: note.id,
@@ -79,8 +98,7 @@ function makeNoteFile(note) {
         tags: note.tags,
         status: note.status,
         workItemId: note.workItemId,
-        branch: note.branch,
-        baseBranch: note.baseBranch,
+        branches: note.branches,
         prs: note.prs,
         docs: note.docs,
         createdAt: note.createdAt,
@@ -129,8 +147,7 @@ function readNoteRecord(fullPath, project, fallbackId, originalProject) {
         tags: Array.isArray(data.tags) ? data.tags.filter((tag) => typeof tag === "string") : [],
         status: data.status === "Completed" || data.status === "Archived" ? data.status : "Active",
         workItemId: typeof data.workItemId === "string" ? data.workItemId : "",
-        branch: typeof data.branch === "string" ? data.branch : "",
-        baseBranch: typeof data.baseBranch === "string" ? data.baseBranch : "",
+        branches: parseBranches(data),
         prs: parseLinks(data.prs),
         docs: parseLinks(data.docs),
         createdAt: typeof data.createdAt === "string" ? data.createdAt : node_fs_1.default.statSync(fullPath).birthtime.toISOString(),

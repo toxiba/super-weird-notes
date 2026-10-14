@@ -260,8 +260,7 @@ function registerHandlers() {
       tags: [],
       status: "Active",
       workItemId: "",
-      branch: "",
-      baseBranch: "",
+      branches: [],
       prs: [],
       docs: [],
       createdAt: now.toISOString(),
@@ -360,7 +359,7 @@ function registerHandlers() {
       const title = path.basename(item.path, path.extname(item.path));
       const note: NoteRecord = {
         id, title, project: item.project, type: "", tags: [], status: "Active",
-        workItemId: "", branch: "", baseBranch: "", prs: [], docs: [],
+        workItemId: "", branches: [], prs: [], docs: [],
         createdAt: date.toISOString(), updatedAt: date.toISOString(),
         body: fs.readFileSync(item.path, "utf8"), path: "", deleted: false,
         fileNameMismatch: false,
