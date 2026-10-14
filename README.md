@@ -19,6 +19,26 @@ npm run build
 
 Run the built app with `npm start`.
 
+## Code layout
+
+```text
+electron/            Desktop side: reads and writes the library, answers the UI
+  main.ts            App start-up
+  window.ts          Main window
+  preload.ts         Bridge that exposes window.workspace to the UI
+  types.ts           Note, project and snapshot types shared with the UI
+  library/           How notes live on disk (paths, projects, note files, watcher, settings)
+  ipc/               What the UI can ask for, one file per area
+src/                 The UI (React)
+  App.tsx            Top-level state and actions, wires the pieces together
+  components/        What you see: sidebar, note list, editor, dialogs
+  hooks/             Note store, editor options, saved layout
+  lib/               Small helpers (dates, filtering, project names, Monaco)
+tests/               Vitest tests
+```
+
+`dist/` and `dist-electron/` are build output and are not committed.
+
 ## Build installers
 
 Install dependencies with `npm install`, then create platform-specific installers:
