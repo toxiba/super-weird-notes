@@ -10,6 +10,7 @@
     "icon:mac": "sh scripts/generate-macos-icon.sh",
     "postinstall": "node node_modules/electron/install.js",
     "preview": "vite preview",
+    "test": "vitest run",
     "start": "electron .",
     "dist:mac": "npm run build && electron-builder --mac dmg zip",
     "dist:win": "npm run build && electron-builder --win nsis"
@@ -32,6 +33,7 @@
     "electron-builder": "^26.15.3",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
+    "vitest": "^5.0.4",
     "wait-on": "^8.0.3"
   },
   "build": {

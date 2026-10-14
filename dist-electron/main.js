@@ -8,7 +8,7 @@ const node_fs_1 = __importDefault(require("node:fs"));
 const node_path_1 = __importDefault(require("node:path"));
 const node_url_1 = require("node:url");
 const node_crypto_1 = require("node:crypto");
-const yaml_1 = require("yaml");
+const notes_1 = require("./notes");
 const UNASSIGNED = "Unassigned";
 const projectRootName = "Projects";
 let mainWindow = null;
@@ -44,13 +44,6 @@ function setRoot(root) {
     node_fs_1.default.writeFileSync(settingsPath(), JSON.stringify({ root }, null, 2));
     watchRoot();
 }
-function safeName(value) {
-    const trimmed = value.trim().replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-");
-    if (!trimmed || trimmed === "." || trimmed === "..") {
-        throw new Error("Enter a valid name.");
-    }
-    return trimmed;
-}
 function projectsDir() {
     if (!libraryRoot)
         throw new Error("Choose a library folder first.");
@@ -63,8 +56,8 @@ function ensureProject(name) {
     const directory = projectDir(name);
     node_fs_1.default.mkdirSync(directory, { recursive: true });
     const legacyNotesDirectory = node_path_1.default.join(directory, "Notes");
-    for (const note of safeReadDir(legacyNotesDirectory)) {
-        if (!note.isFile() || ![".md", ".txt"].includes(node_path_1.default.extname(note.name).toLowerCase()))
+    for (const note of (0, notes_1.safeReadDir)(legacyNotesDirectory)) {
+        if (!note.isFile() || !(0, notes_1.isNoteFilename)(note.name))
             continue;
         const source = node_path_1.default.join(legacyNotesDirectory, note.name);
         const destination = node_path_1.default.join(directory, note.name);
@@ -72,7 +65,7 @@ function ensureProject(name) {
             node_fs_1.default.renameSync(source, destination);
     }
     for (const legacyDirectory of [legacyNotesDirectory, node_path_1.default.join(directory, "Files"), node_path_1.default.join(directory, "Attachments")]) {
-        removeEmptyDirectories(legacyDirectory);
+        (0, notes_1.removeEmptyDirectories)(legacyDirectory);
     }
     return directory;
 }
@@ -102,40 +95,8 @@ function watchRoot() {
         watcher = null;
     }
 }
-function safeReadDir(directory) {
-    try {
-        return node_fs_1.default.readdirSync(directory, { withFileTypes: true });
-    }
-    catch {
-        return [];
-    }
-}
-function removeEmptyDirectories(directory) {
-    if (!node_fs_1.default.existsSync(directory))
-        return;
-    for (const entry of safeReadDir(directory)) {
-        if (entry.isDirectory())
-            removeEmptyDirectories(node_path_1.default.join(directory, entry.name));
-    }
-    if (safeReadDir(directory).length === 0)
-        node_fs_1.default.rmdirSync(directory);
-}
-function filesIn(directory, relative = "", includeHidden = false) {
-    const output = [];
-    for (const entry of safeReadDir(directory)) {
-        if (!includeHidden && entry.name.startsWith("."))
-            continue;
-        const childRelative = node_path_1.default.join(relative, entry.name);
-        const fullPath = node_path_1.default.join(directory, entry.name);
-        if (entry.isDirectory())
-            output.push(...filesIn(fullPath, childRelative, includeHidden));
-        else
-            output.push(childRelative);
-    }
-    return output;
-}
 function projectNames() {
-    return safeReadDir(projectsDir())
+    return (0, notes_1.safeReadDir)(projectsDir())
         .filter((entry) => entry.isDirectory())
         .map((entry) => entry.name)
         .sort((a, b) => a.localeCompare(b));
@@ -146,33 +107,12 @@ function noteRecords() {
     const notes = [];
     for (const project of projectNames()) {
         const directory = projectDir(project);
-        const noteFiles = [directory, node_path_1.default.join(directory, "Notes")].flatMap((notesDirectory) => safeReadDir(notesDirectory)
-            .filter((file) => file.isFile() && [".md", ".txt"].includes(node_path_1.default.extname(file.name).toLowerCase()))
+        const noteFiles = [directory, node_path_1.default.join(directory, "Notes")].flatMap((notesDirectory) => (0, notes_1.safeReadDir)(notesDirectory)
+            .filter((file) => file.isFile() && (0, notes_1.isNoteFilename)(file.name))
             .map((file) => node_path_1.default.join(notesDirectory, file.name)));
         for (const fullPath of noteFiles) {
-            const filename = node_path_1.default.basename(fullPath);
             try {
-                const parsed = parseNoteFile(node_fs_1.default.readFileSync(fullPath, "utf8"));
-                const data = parsed.data;
-                const id = typeof data.id === "string" ? data.id : filename;
-                notes.push({
-                    id,
-                    title: typeof data.title === "string" ? data.title : filename.replace(/\.(md|txt)$/i, ""),
-                    project,
-                    type: typeof data.type === "string" ? data.type : "",
-                    tags: Array.isArray(data.tags) ? data.tags.filter((tag) => typeof tag === "string") : [],
-                    status: data.status === "Completed" || data.status === "Archived" ? data.status : "Active",
-                    workItemId: typeof data.workItemId === "string" ? data.workItemId : "",
-                    branches: parseBranches(data),
-                    prs: parseLinks(data.prs),
-                    docs: parseLinks(data.docs),
-                    createdAt: typeof data.createdAt === "string" ? data.createdAt : node_fs_1.default.statSync(fullPath).birthtime.toISOString(),
-                    updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : node_fs_1.default.statSync(fullPath).mtime.toISOString(),
-                    body: parsed.content,
-                    path: fullPath,
-                    deleted: false,
-                    fileNameMismatch: filename !== expectedNoteFilename(typeof data.title === "string" ? data.title : filename.replace(/\.(md|txt)$/i, ""), id, node_path_1.default.extname(filename)),
-                });
+                notes.push((0, notes_1.readNoteRecord)(fullPath, project, node_path_1.default.basename(fullPath)));
             }
             catch (error) {
                 console.error(`Could not read note ${fullPath}:`, error);
@@ -180,74 +120,23 @@ function noteRecords() {
         }
     }
     const trashDir = node_path_1.default.join(libraryRoot, "Trash");
-    for (const folder of safeReadDir(trashDir)) {
+    for (const folder of (0, notes_1.safeReadDir)(trashDir)) {
         if (!folder.isDirectory())
             continue;
         const directory = node_path_1.default.join(trashDir, folder.name);
         try {
             const manifest = JSON.parse(node_fs_1.default.readFileSync(node_path_1.default.join(directory, "manifest.json"), "utf8"));
-            const noteFile = safeReadDir(directory).find((entry) => entry.isFile() && [".md", ".txt"].includes(node_path_1.default.extname(entry.name).toLowerCase()));
+            const noteFile = (0, notes_1.safeReadDir)(directory).find((entry) => entry.isFile() && (0, notes_1.isNoteFilename)(entry.name));
             if (!noteFile)
                 continue;
             const fullPath = node_path_1.default.join(directory, noteFile.name);
-            const parsed = parseNoteFile(node_fs_1.default.readFileSync(fullPath, "utf8"));
-            const data = parsed.data;
-            const id = typeof data.id === "string" ? data.id : folder.name;
-            notes.push({
-                id,
-                title: typeof data.title === "string" ? data.title : noteFile.name.replace(/\.(md|txt)$/i, ""),
-                project: manifest.originalProject,
-                type: typeof data.type === "string" ? data.type : "",
-                tags: Array.isArray(data.tags) ? data.tags.filter((tag) => typeof tag === "string") : [],
-                status: data.status === "Completed" || data.status === "Archived" ? data.status : "Active",
-                workItemId: typeof data.workItemId === "string" ? data.workItemId : "",
-                branches: parseBranches(data),
-                prs: parseLinks(data.prs),
-                docs: parseLinks(data.docs),
-                createdAt: typeof data.createdAt === "string" ? data.createdAt : node_fs_1.default.statSync(fullPath).birthtime.toISOString(),
-                updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : node_fs_1.default.statSync(fullPath).mtime.toISOString(),
-                body: parsed.content,
-                path: fullPath,
-                deleted: true,
-                originalProject: manifest.originalProject,
-                fileNameMismatch: noteFile.name !== expectedNoteFilename(typeof data.title === "string" ? data.title : noteFile.name.replace(/\.(md|txt)$/i, ""), id, node_path_1.default.extname(noteFile.name)),
-            });
+            notes.push((0, notes_1.readNoteRecord)(fullPath, manifest.originalProject, folder.name, manifest.originalProject));
         }
         catch (error) {
             console.error(`Could not read trash entry ${folder.name}:`, error);
         }
     }
     return notes;
-}
-function parseLinks(value) {
-    if (!Array.isArray(value))
-        return [];
-    return value.flatMap((link) => {
-        if (!link || typeof link !== "object")
-            return [];
-        const item = link;
-        return typeof item.url === "string"
-            ? [{ label: typeof item.label === "string" ? item.label : "", url: item.url }]
-            : [];
-    });
-}
-// Older notes store a single `branch`/`baseBranch` pair; newer ones store a `branches` list.
-function parseBranches(data) {
-    if (Array.isArray(data.branches)) {
-        return data.branches.flatMap((branch) => {
-            if (typeof branch === "string")
-                return [{ name: branch, from: "" }];
-            if (!branch || typeof branch !== "object")
-                return [];
-            const item = branch;
-            return typeof item.name === "string"
-                ? [{ name: item.name, from: typeof item.from === "string" ? item.from : "" }]
-                : [];
-        });
-    }
-    const name = typeof data.branch === "string" ? data.branch : "";
-    const from = typeof data.baseBranch === "string" ? data.baseBranch : "";
-    return name || from ? [{ name, from }] : [];
 }
 function getSnapshot() {
     if (!libraryRoot)
@@ -264,49 +153,8 @@ function getSnapshot() {
         noteTypes: [...new Set(["Feature", "Test", "UAT", "Fix", "Incident", "Data request", "Random", ...types])],
     };
 }
-function makeNoteFile(note) {
-    const metadata = {
-        id: note.id,
-        title: note.title,
-        type: note.type || null,
-        tags: note.tags,
-        status: note.status,
-        workItemId: note.workItemId,
-        branches: note.branches,
-        prs: note.prs,
-        docs: note.docs,
-        createdAt: note.createdAt,
-        updatedAt: note.updatedAt,
-    };
-    return `---\n${(0, yaml_1.stringify)(metadata).trimEnd()}\n---\n${note.body}`;
-}
-function parseNoteFile(content) {
-    const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
-    if (!match)
-        return { data: {}, content };
-    const data = (0, yaml_1.parse)(match[1]);
-    if (!data || typeof data !== "object" || Array.isArray(data)) {
-        throw new Error("Note YAML frontmatter must be a mapping.");
-    }
-    return {
-        data: data,
-        content: content.slice(match[0].length),
-    };
-}
-function titleSlug(title) {
-    const slug = safeName(title.trim() || "Untitled note")
-        .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-zA-Z0-9_-]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 70) || "note";
-    return slug;
-}
-function expectedNoteFilename(title, id, extension = ".txt") {
-    return `${titleSlug(title)}--${id.slice(0, 8)}${extension}`;
-}
 function notePath(project, title, id) {
-    return node_path_1.default.join(projectDir(project), expectedNoteFilename(title, id));
+    return node_path_1.default.join(projectDir(project), (0, notes_1.expectedNoteFilename)(title, id));
 }
 function assertUniqueNote(id, targetPath, currentPath) {
     const collision = noteRecords().find((note) => note.id === id && note.path !== targetPath && note.path !== currentPath);
@@ -328,7 +176,7 @@ function registerHandlers() {
     electron_1.ipcMain.handle("workspace:choose-root", chooseRoot);
     electron_1.ipcMain.handle("workspace:get-snapshot", getSnapshot);
     electron_1.ipcMain.handle("project:create", (_event, rawName) => {
-        const name = safeName(rawName);
+        const name = (0, notes_1.safeName)(rawName);
         if (name === UNASSIGNED)
             throw new Error("Unassigned is already provided.");
         if (node_fs_1.default.existsSync(projectDir(name)))
@@ -339,7 +187,7 @@ function registerHandlers() {
     electron_1.ipcMain.handle("project:rename", (_event, oldName, rawName) => {
         if (oldName === UNASSIGNED)
             throw new Error("Unassigned cannot be renamed.");
-        const nextName = safeName(rawName);
+        const nextName = (0, notes_1.safeName)(rawName);
         if (oldName === nextName)
             return;
         const from = projectDir(oldName);
@@ -359,7 +207,7 @@ function registerHandlers() {
             throw new Error("Project not found.");
         const notes = noteRecords().filter((note) => note.project === name && !note.deleted);
         const managedFiles = new Set(notes.map((note) => node_path_1.default.relative(directory, note.path)));
-        const otherFiles = filesIn(directory, "", true).filter((file) => !managedFiles.has(file));
+        const otherFiles = (0, notes_1.filesIn)(directory, "", true).filter((file) => !managedFiles.has(file));
         if (otherFiles.length > 0)
             throw new Error("This Project contains non-note files. Move them elsewhere before deleting the Project.");
         const unassignedDirectory = ensureProject(UNASSIGNED);
@@ -393,7 +241,7 @@ function registerHandlers() {
             }
             throw error;
         }
-        removeEmptyDirectories(directory);
+        (0, notes_1.removeEmptyDirectories)(directory);
         notifyChanged();
     });
     electron_1.ipcMain.handle("note:create", (_event, project) => {
@@ -420,7 +268,7 @@ function registerHandlers() {
             fileNameMismatch: false,
         };
         const target = notePath(project, title, note.id);
-        node_fs_1.default.writeFileSync(target, makeNoteFile(note), { flag: "wx" });
+        node_fs_1.default.writeFileSync(target, (0, notes_1.makeNoteFile)(note), { flag: "wx" });
         notifyChanged();
         return { ...note, path: target };
     });
@@ -439,7 +287,7 @@ function registerHandlers() {
             fileNameMismatch: false,
         };
         const target = notePath(project, recovered.title, id);
-        node_fs_1.default.writeFileSync(target, makeNoteFile(recovered), { flag: "wx" });
+        node_fs_1.default.writeFileSync(target, (0, notes_1.makeNoteFile)(recovered), { flag: "wx" });
         notifyChanged();
         return { ...recovered, path: target };
     });
@@ -461,9 +309,9 @@ function registerHandlers() {
         const updated = {
             ...note,
             updatedAt: new Date().toISOString(),
-            fileNameMismatch: node_path_1.default.basename(target) !== expectedNoteFilename(note.title, note.id),
+            fileNameMismatch: node_path_1.default.basename(target) !== (0, notes_1.expectedNoteFilename)(note.title, note.id),
         };
-        node_fs_1.default.writeFileSync(target, makeNoteFile(updated));
+        node_fs_1.default.writeFileSync(target, (0, notes_1.makeNoteFile)(updated));
         notifyChanged();
         return { ...updated, path: target };
     });
@@ -491,14 +339,14 @@ function registerHandlers() {
             throw new Error("A note with the same filename already exists in that Project.");
         node_fs_1.default.renameSync(note.path, target);
         node_fs_1.default.rmSync(node_path_1.default.join(trashEntry, "manifest.json"), { force: true });
-        removeEmptyDirectories(node_path_1.default.join(trashEntry, "Attachments"));
-        if (safeReadDir(trashEntry).length === 0)
+        (0, notes_1.removeEmptyDirectories)(node_path_1.default.join(trashEntry, "Attachments"));
+        if ((0, notes_1.safeReadDir)(trashEntry).length === 0)
             node_fs_1.default.rmdirSync(trashEntry);
         notifyChanged();
     });
     electron_1.ipcMain.handle("trash:empty", () => {
         const trashDir = node_path_1.default.join(libraryRoot, "Trash");
-        for (const entry of safeReadDir(trashDir)) {
+        for (const entry of (0, notes_1.safeReadDir)(trashDir)) {
             node_fs_1.default.rmSync(node_path_1.default.join(trashDir, entry.name), { recursive: true, force: true });
         }
         notifyChanged();
@@ -523,7 +371,7 @@ function registerHandlers() {
                 fileNameMismatch: false,
             };
             const target = notePath(item.project, title, id);
-            node_fs_1.default.writeFileSync(target, makeNoteFile(note), { flag: "wx" });
+            node_fs_1.default.writeFileSync(target, (0, notes_1.makeNoteFile)(note), { flag: "wx" });
             imported += 1;
         }
         notifyChanged();
