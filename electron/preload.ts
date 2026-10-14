@@ -34,6 +34,7 @@ export interface LinkRecord {
 export interface BranchRecord {
   name: string;
   from: string;
+  repo: string;
 }
 
 export interface NoteRecord {

@@ -73,22 +73,27 @@ function parseLinks(value) {
     });
 }
 // Older notes store a single `branch`/`baseBranch` pair; newer ones store a `branches` list.
+// Branches saved before the repo field existed read with an empty repo.
 function parseBranches(data) {
     if (Array.isArray(data.branches)) {
         return data.branches.flatMap((branch) => {
             if (typeof branch === "string")
-                return [{ name: branch, from: "" }];
+                return [{ name: branch, from: "", repo: "" }];
             if (!branch || typeof branch !== "object")
                 return [];
             const item = branch;
             return typeof item.name === "string"
-                ? [{ name: item.name, from: typeof item.from === "string" ? item.from : "" }]
+                ? [{
+                        name: item.name,
+                        from: typeof item.from === "string" ? item.from : "",
+                        repo: typeof item.repo === "string" ? item.repo : "",
+                    }]
                 : [];
         });
     }
     const name = typeof data.branch === "string" ? data.branch : "";
     const from = typeof data.baseBranch === "string" ? data.baseBranch : "";
-    return name || from ? [{ name, from }] : [];
+    return name || from ? [{ name, from, repo: "" }] : [];
 }
 function makeNoteFile(note) {
     const metadata = {

@@ -27,7 +27,7 @@ function sampleNote(overrides: Partial<NoteRecord> = {}): NoteRecord {
     tags: ["release", "backend"],
     status: "Completed",
     workItemId: "WI-42",
-    branches: [{ name: "feature/deploy", from: "main" }],
+    branches: [{ name: "feature/deploy", from: "main", repo: "org/app" }],
     prs: [{ label: "Main PR", url: "https://example.com/pr/1" }],
     docs: [{ label: "", url: "https://example.com/doc" }],
     createdAt: "2026-01-02T03:04:05.000Z",
@@ -136,17 +136,19 @@ describe("parseLinks", () => {
 describe("parseBranches", () => {
   it("reads a branches list, accepting plain strings", () => {
     expect(
-      parseBranches({ branches: [{ name: "feature/a", from: "main" }, "hotfix", { name: "b" }, { from: "x" }, null] }),
+      parseBranches({
+        branches: [{ name: "feature/a", from: "main", repo: "org/app" }, "hotfix", { name: "b", repo: 3 }, { from: "x" }, null],
+      }),
     ).toEqual([
-      { name: "feature/a", from: "main" },
-      { name: "hotfix", from: "" },
-      { name: "b", from: "" },
+      { name: "feature/a", from: "main", repo: "org/app" },
+      { name: "hotfix", from: "", repo: "" },
+      { name: "b", from: "", repo: "" },
     ]);
   });
 
   it("reads the older single branch/baseBranch fields as a one-item list", () => {
     expect(parseBranches({ branch: "feature/old", baseBranch: "develop" })).toEqual([
-      { name: "feature/old", from: "develop" },
+      { name: "feature/old", from: "develop", repo: "" },
     ]);
     expect(parseBranches({ branch: "", baseBranch: "" })).toEqual([]);
     expect(parseBranches({})).toEqual([]);

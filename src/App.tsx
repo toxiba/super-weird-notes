@@ -410,7 +410,7 @@ function App() {
       if (!query) return true;
       const haystack = [
         note.title, note.body, note.project, note.type, note.status, note.workItemId,
-        ...note.branches.flatMap((branch) => [branch.name, branch.from]), ...note.tags,
+        ...note.branches.flatMap((branch) => [branch.name, branch.from, branch.repo]), ...note.tags,
         ...note.prs.flatMap((link) => [link.label, link.url]),
         ...note.docs.flatMap((link) => [link.label, link.url]),
       ].join(" ").toLocaleLowerCase();
@@ -970,8 +970,8 @@ function MetadataEditor({ note, projects, knownTags, readOnly, onOpenExternal, o
     onChange({ [field]: links });
   };
   const removeLink = (field: LinkField, index: number) => onChange({ [field]: note[field].filter((_item, i) => i !== index) });
-  const addBranch = () => onChange({ branches: [...note.branches, { name: "", from: "" }] });
-  const editBranch = (index: number, key: "name" | "from", value: string) =>
+  const addBranch = () => onChange({ branches: [...note.branches, { name: "", from: "", repo: "" }] });
+  const editBranch = (index: number, key: "name" | "from" | "repo", value: string) =>
     onChange({ branches: note.branches.map((item, i) => i === index ? { ...item, [key]: value } : item) });
   const removeBranch = (index: number) => onChange({ branches: note.branches.filter((_item, i) => i !== index) });
   const addTag = () => {
@@ -989,7 +989,7 @@ function MetadataEditor({ note, projects, knownTags, readOnly, onOpenExternal, o
       </label>
       <div className="branch-fields">
         <div className="field-label link-title">BRANCHES<button disabled={readOnly} onClick={addBranch}>＋ Add</button></div>
-        {note.branches.map((branch, index) => <div className="link-row" key={`branch-${index}`}><input disabled={readOnly} value={branch.name} onChange={(event) => editBranch(index, "name", event.target.value)} placeholder="feature/my-branch" /><input disabled={readOnly} value={branch.from} onChange={(event) => editBranch(index, "from", event.target.value)} placeholder="From branch, e.g. main" /><button disabled={readOnly} onClick={() => removeBranch(index)} title="Remove branch">×</button></div>)}
+        {note.branches.map((branch, index) => <div className="link-row" key={`branch-${index}`}><input disabled={readOnly} value={branch.name} onChange={(event) => editBranch(index, "name", event.target.value)} placeholder="feature/my-branch" /><input disabled={readOnly} value={branch.from} onChange={(event) => editBranch(index, "from", event.target.value)} placeholder="From branch, e.g. main" /><input disabled={readOnly} value={branch.repo} onChange={(event) => editBranch(index, "repo", event.target.value)} placeholder="Repo, e.g. org/repo" /><button disabled={readOnly} onClick={() => removeBranch(index)} title="Remove branch">×</button></div>)}
       </div>
       <div className="field-label tags-field">TAGS
         <div className="tags-input">{note.tags.map((tag) => <button className="tag-chip" key={tag} disabled={readOnly} onClick={() => onChange({ tags: note.tags.filter((item) => item !== tag) })}>{tag} ×</button>)}<input disabled={readOnly} value={tagInput} list="existing-tags" onChange={(event) => setTagInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addTag(); } }} onBlur={addTag} placeholder="Add tag…" /><datalist id="existing-tags">{knownTags.map((tag) => <option key={tag}>{tag}</option>)}</datalist></div>
