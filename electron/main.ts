@@ -3,8 +3,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import type { ImportItem, LinkRecord, NoteRecord, Snapshot } from "./preload";
+import type { ImportItem, NoteRecord, Snapshot } from "./preload";
+import {
+  expectedNoteFilename,
+  filesIn,
+  isNoteFilename,
+  makeNoteFile,
+  readNoteRecord,
+  removeEmptyDirectories,
+  safeName,
+  safeReadDir,
+} from "./notes";
 
 const UNASSIGNED = "Unassigned";
 const projectRootName = "Projects";
@@ -44,14 +53,6 @@ function setRoot(root: string) {
   watchRoot();
 }
 
-function safeName(value: string) {
-  const trimmed = value.trim().replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-");
-  if (!trimmed || trimmed === "." || trimmed === "..") {
-    throw new Error("Enter a valid name.");
-  }
-  return trimmed;
-}
-
 function projectsDir() {
   if (!libraryRoot) throw new Error("Choose a library folder first.");
   return path.join(libraryRoot, projectRootName);
@@ -66,7 +67,7 @@ function ensureProject(name: string) {
   fs.mkdirSync(directory, { recursive: true });
   const legacyNotesDirectory = path.join(directory, "Notes");
   for (const note of safeReadDir(legacyNotesDirectory)) {
-    if (!note.isFile() || ![".md", ".txt"].includes(path.extname(note.name).toLowerCase())) continue;
+    if (!note.isFile() || !isNoteFilename(note.name)) continue;
     const source = path.join(legacyNotesDirectory, note.name);
     const destination = path.join(directory, note.name);
     if (!fs.existsSync(destination)) fs.renameSync(source, destination);
@@ -102,34 +103,6 @@ function watchRoot() {
   }
 }
 
-function safeReadDir(directory: string): fs.Dirent[] {
-  try {
-    return fs.readdirSync(directory, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-}
-
-function removeEmptyDirectories(directory: string) {
-  if (!fs.existsSync(directory)) return;
-  for (const entry of safeReadDir(directory)) {
-    if (entry.isDirectory()) removeEmptyDirectories(path.join(directory, entry.name));
-  }
-  if (safeReadDir(directory).length === 0) fs.rmdirSync(directory);
-}
-
-function filesIn(directory: string, relative = "", includeHidden = false): string[] {
-  const output: string[] = [];
-  for (const entry of safeReadDir(directory)) {
-    if (!includeHidden && entry.name.startsWith(".")) continue;
-    const childRelative = path.join(relative, entry.name);
-    const fullPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) output.push(...filesIn(fullPath, childRelative, includeHidden));
-    else output.push(childRelative);
-  }
-  return output;
-}
-
 function projectNames(): string[] {
   return safeReadDir(projectsDir())
     .filter((entry) => entry.isDirectory())
@@ -144,38 +117,12 @@ function noteRecords(): NoteRecord[] {
     const directory = projectDir(project);
     const noteFiles = [directory, path.join(directory, "Notes")].flatMap((notesDirectory) =>
       safeReadDir(notesDirectory)
-        .filter((file) => file.isFile() && [".md", ".txt"].includes(path.extname(file.name).toLowerCase()))
+        .filter((file) => file.isFile() && isNoteFilename(file.name))
         .map((file) => path.join(notesDirectory, file.name)),
     );
     for (const fullPath of noteFiles) {
-      const filename = path.basename(fullPath);
       try {
-        const parsed = parseNoteFile(fs.readFileSync(fullPath, "utf8"));
-        const data = parsed.data as Record<string, unknown>;
-        const id = typeof data.id === "string" ? data.id : filename;
-        notes.push({
-          id,
-          title: typeof data.title === "string" ? data.title : filename.replace(/\.(md|txt)$/i, ""),
-          project,
-          type: typeof data.type === "string" ? data.type : "",
-          tags: Array.isArray(data.tags) ? data.tags.filter((tag): tag is string => typeof tag === "string") : [],
-          status: data.status === "Completed" || data.status === "Archived" ? data.status : "Active",
-          workItemId: typeof data.workItemId === "string" ? data.workItemId : "",
-          branch: typeof data.branch === "string" ? data.branch : "",
-          baseBranch: typeof data.baseBranch === "string" ? data.baseBranch : "",
-          prs: parseLinks(data.prs),
-          docs: parseLinks(data.docs),
-          createdAt: typeof data.createdAt === "string" ? data.createdAt : fs.statSync(fullPath).birthtime.toISOString(),
-          updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : fs.statSync(fullPath).mtime.toISOString(),
-          body: parsed.content,
-          path: fullPath,
-          deleted: false,
-          fileNameMismatch: filename !== expectedNoteFilename(
-            typeof data.title === "string" ? data.title : filename.replace(/\.(md|txt)$/i, ""),
-            id,
-            path.extname(filename),
-          ),
-        });
+        notes.push(readNoteRecord(fullPath, project, path.basename(fullPath)));
       } catch (error) {
         console.error(`Could not read note ${fullPath}:`, error);
       }
@@ -189,52 +136,15 @@ function noteRecords(): NoteRecord[] {
       const manifest = JSON.parse(fs.readFileSync(path.join(directory, "manifest.json"), "utf8")) as {
         originalProject: string;
       };
-      const noteFile = safeReadDir(directory).find((entry) => entry.isFile() && [".md", ".txt"].includes(path.extname(entry.name).toLowerCase()));
+      const noteFile = safeReadDir(directory).find((entry) => entry.isFile() && isNoteFilename(entry.name));
       if (!noteFile) continue;
       const fullPath = path.join(directory, noteFile.name);
-      const parsed = parseNoteFile(fs.readFileSync(fullPath, "utf8"));
-      const data = parsed.data as Record<string, unknown>;
-      const id = typeof data.id === "string" ? data.id : folder.name;
-      notes.push({
-        id,
-        title: typeof data.title === "string" ? data.title : noteFile.name.replace(/\.(md|txt)$/i, ""),
-        project: manifest.originalProject,
-        type: typeof data.type === "string" ? data.type : "",
-        tags: Array.isArray(data.tags) ? data.tags.filter((tag): tag is string => typeof tag === "string") : [],
-        status: data.status === "Completed" || data.status === "Archived" ? data.status : "Active",
-        workItemId: typeof data.workItemId === "string" ? data.workItemId : "",
-        branch: typeof data.branch === "string" ? data.branch : "",
-        baseBranch: typeof data.baseBranch === "string" ? data.baseBranch : "",
-        prs: parseLinks(data.prs),
-        docs: parseLinks(data.docs),
-        createdAt: typeof data.createdAt === "string" ? data.createdAt : fs.statSync(fullPath).birthtime.toISOString(),
-        updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : fs.statSync(fullPath).mtime.toISOString(),
-        body: parsed.content,
-        path: fullPath,
-        deleted: true,
-        originalProject: manifest.originalProject,
-        fileNameMismatch: noteFile.name !== expectedNoteFilename(
-          typeof data.title === "string" ? data.title : noteFile.name.replace(/\.(md|txt)$/i, ""),
-          id,
-          path.extname(noteFile.name),
-        ),
-      });
+      notes.push(readNoteRecord(fullPath, manifest.originalProject, folder.name, manifest.originalProject));
     } catch (error) {
       console.error(`Could not read trash entry ${folder.name}:`, error);
     }
   }
   return notes;
-}
-
-function parseLinks(value: unknown): LinkRecord[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((link) => {
-    if (!link || typeof link !== "object") return [];
-    const item = link as Record<string, unknown>;
-    return typeof item.url === "string"
-      ? [{ label: typeof item.label === "string" ? item.label : "", url: item.url }]
-      : [];
-  });
 }
 
 function getSnapshot(): Snapshot {
@@ -250,51 +160,6 @@ function getSnapshot(): Snapshot {
     notes,
     noteTypes: [...new Set(["Feature", "Test", "UAT", "Fix", "Incident", "Data request", "Random", ...types])],
   };
-}
-
-function makeNoteFile(note: NoteRecord) {
-  const metadata = {
-    id: note.id,
-    title: note.title,
-    type: note.type || null,
-    tags: note.tags,
-    status: note.status,
-    workItemId: note.workItemId,
-    branch: note.branch,
-    baseBranch: note.baseBranch,
-    prs: note.prs,
-    docs: note.docs,
-    createdAt: note.createdAt,
-    updatedAt: note.updatedAt,
-  };
-  return `---\n${stringifyYaml(metadata).trimEnd()}\n---\n${note.body}`;
-}
-
-function parseNoteFile(content: string) {
-  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
-  if (!match) return { data: {}, content };
-  const data: unknown = parseYaml(match[1]);
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new Error("Note YAML frontmatter must be a mapping.");
-  }
-  return {
-    data: data as Record<string, unknown>,
-    content: content.slice(match[0].length),
-  };
-}
-
-function titleSlug(title: string) {
-  const slug = safeName(title.trim() || "Untitled note")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 70) || "note";
-  return slug;
-}
-
-function expectedNoteFilename(title: string, id: string, extension = ".txt") {
-  return `${titleSlug(title)}--${id.slice(0, 8)}${extension}`;
 }
 
 function notePath(project: string, title: string, id: string) {
