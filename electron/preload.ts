@@ -31,6 +31,11 @@ export interface LinkRecord {
   url: string;
 }
 
+export interface BranchRecord {
+  name: string;
+  from: string;
+}
+
 export interface NoteRecord {
   id: string;
   title: string;
@@ -39,8 +44,7 @@ export interface NoteRecord {
   tags: string[];
   status: "Active" | "Completed" | "Archived";
   workItemId: string;
-  branch: string;
-  baseBranch: string;
+  branches: BranchRecord[];
   prs: LinkRecord[];
   docs: LinkRecord[];
   createdAt: string;

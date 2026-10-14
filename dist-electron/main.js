@@ -163,8 +163,7 @@ function noteRecords() {
                     tags: Array.isArray(data.tags) ? data.tags.filter((tag) => typeof tag === "string") : [],
                     status: data.status === "Completed" || data.status === "Archived" ? data.status : "Active",
                     workItemId: typeof data.workItemId === "string" ? data.workItemId : "",
-                    branch: typeof data.branch === "string" ? data.branch : "",
-                    baseBranch: typeof data.baseBranch === "string" ? data.baseBranch : "",
+                    branches: parseBranches(data),
                     prs: parseLinks(data.prs),
                     docs: parseLinks(data.docs),
                     createdAt: typeof data.createdAt === "string" ? data.createdAt : node_fs_1.default.statSync(fullPath).birthtime.toISOString(),
@@ -202,8 +201,7 @@ function noteRecords() {
                 tags: Array.isArray(data.tags) ? data.tags.filter((tag) => typeof tag === "string") : [],
                 status: data.status === "Completed" || data.status === "Archived" ? data.status : "Active",
                 workItemId: typeof data.workItemId === "string" ? data.workItemId : "",
-                branch: typeof data.branch === "string" ? data.branch : "",
-                baseBranch: typeof data.baseBranch === "string" ? data.baseBranch : "",
+                branches: parseBranches(data),
                 prs: parseLinks(data.prs),
                 docs: parseLinks(data.docs),
                 createdAt: typeof data.createdAt === "string" ? data.createdAt : node_fs_1.default.statSync(fullPath).birthtime.toISOString(),
@@ -233,6 +231,24 @@ function parseLinks(value) {
             : [];
     });
 }
+// Older notes store a single `branch`/`baseBranch` pair; newer ones store a `branches` list.
+function parseBranches(data) {
+    if (Array.isArray(data.branches)) {
+        return data.branches.flatMap((branch) => {
+            if (typeof branch === "string")
+                return [{ name: branch, from: "" }];
+            if (!branch || typeof branch !== "object")
+                return [];
+            const item = branch;
+            return typeof item.name === "string"
+                ? [{ name: item.name, from: typeof item.from === "string" ? item.from : "" }]
+                : [];
+        });
+    }
+    const name = typeof data.branch === "string" ? data.branch : "";
+    const from = typeof data.baseBranch === "string" ? data.baseBranch : "";
+    return name || from ? [{ name, from }] : [];
+}
 function getSnapshot() {
     if (!libraryRoot)
         throw new Error("Choose a library folder first.");
@@ -256,8 +272,7 @@ function makeNoteFile(note) {
         tags: note.tags,
         status: note.status,
         workItemId: note.workItemId,
-        branch: note.branch,
-        baseBranch: note.baseBranch,
+        branches: note.branches,
         prs: note.prs,
         docs: note.docs,
         createdAt: note.createdAt,
@@ -394,8 +409,7 @@ function registerHandlers() {
             tags: [],
             status: "Active",
             workItemId: "",
-            branch: "",
-            baseBranch: "",
+            branches: [],
             prs: [],
             docs: [],
             createdAt: now.toISOString(),
@@ -503,7 +517,7 @@ function registerHandlers() {
             const title = node_path_1.default.basename(item.path, node_path_1.default.extname(item.path));
             const note = {
                 id, title, project: item.project, type: "", tags: [], status: "Active",
-                workItemId: "", branch: "", baseBranch: "", prs: [], docs: [],
+                workItemId: "", branches: [], prs: [], docs: [],
                 createdAt: date.toISOString(), updatedAt: date.toISOString(),
                 body: node_fs_1.default.readFileSync(item.path, "utf8"), path: "", deleted: false,
                 fileNameMismatch: false,
