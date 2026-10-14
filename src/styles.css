@@ -58,6 +58,7 @@ kbd { color: #8d91a0; font-size: 10px; border: 1px solid #343741; border-radius:
 .projects-heading-actions { display: flex; align-items: center; gap: 7px; margin-left: auto; }
 .projects-section-toggle { display: flex; flex: 1; align-items: center; justify-content: space-between; padding: 0; border: 0; color: inherit; background: transparent; cursor: pointer; font: inherit; letter-spacing: inherit; text-align: left; }
 .projects-section-toggle:hover { color: #a8abb7; }
+.projects-chevron { flex: 0 0 auto; }
 .tiny-muted { font-size: 13px; color: #545966; }
 .tiny-action { color: #a9acb8; background: transparent; border: 0; font-size: 18px; line-height: 12px; cursor: pointer; padding: 0 2px; }
 .tiny-action:hover { color: var(--accent); }
@@ -152,8 +153,8 @@ kbd { color: #8d91a0; font-size: 10px; border: 1px solid #343741; border-radius:
 .tab-strip { display: flex; min-width: 0; overflow: auto hidden; }
 .editor-tab { min-width: 90px; max-width: 300px; display: flex; align-items: center; border-right: 1px solid #282a33; color: #898d99; font-size: 11px; }
 .editor-tab.current { color: #e0d9ff; background: #1e1c26; box-shadow: inset 0 2px #a48afa; }
-.tab-title { display: flex; align-items: center; gap: 8px; flex: 1; align-self: stretch; min-width: 0; overflow: hidden; padding: 0 8px 0 12px; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; font-size: inherit; }
-.tab-note-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.tab-title { display: flex; align-items: center; gap: 4px; flex: 1; align-self: stretch; min-width: 0; overflow: hidden; padding: 0 8px 0 12px; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; font-size: inherit; }
+.tab-note-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .tab-project-title { flex: 0 1 auto; max-width: 45%; overflow: hidden; color: #aaa3c3; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
 .tab-close { flex: 0 0 auto; align-self: stretch; padding: 0 8px; border: 0; background: transparent; color: #7e828f; cursor: pointer; font-size: 14px; }
 .tab-close:hover { color: white; }
@@ -188,6 +189,7 @@ kbd { color: #8d91a0; font-size: 10px; border: 1px solid #343741; border-radius:
 .link-fields { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .link-editor { min-width: 0; }
 .branch-fields { grid-column: 1 / -1; min-width: 0; }
+.branch-fields .link-row input { width: 33.33%; }
 .link-title { flex-direction: row; justify-content: space-between; align-items: center; margin-bottom: 7px; }
 .link-title button { color: #b6a3ff; background: transparent; border: 0; font-size: 8px; cursor: pointer; }
 .link-row { display: flex; gap: 4px; margin-bottom: 5px; }
