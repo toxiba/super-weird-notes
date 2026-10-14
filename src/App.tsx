@@ -723,10 +723,13 @@ function App() {
           <div className="side-section projects-section">
             <div className="section-label projects-heading">
               <button className="projects-section-toggle" onClick={() => setProjectsCollapsed(!projectsCollapsed)} aria-expanded={!projectsCollapsed} aria-label={`${projectsCollapsed ? "Expand" : "Collapse"} Projects`} title={`${projectsCollapsed ? "Expand" : "Collapse"} Projects`}>
-                <span>PROJECTS</span><span className="tiny-muted">{projectsCollapsed ? "›" : "⌄"}</span>
+                <span>PROJECTS</span>
               </button>
               <div className="projects-heading-actions">
                 <button className="tiny-action" onClick={openCreateProject} title="New Project" aria-label="New project">＋</button>
+                <button className="projects-section-toggle projects-chevron" onClick={() => setProjectsCollapsed(!projectsCollapsed)} aria-expanded={!projectsCollapsed} aria-label={`${projectsCollapsed ? "Expand" : "Collapse"} Projects`} title={`${projectsCollapsed ? "Expand" : "Collapse"} Projects`}>
+                  <span className="tiny-muted">{projectsCollapsed ? "›" : "⌄"}</span>
+                </button>
               </div>
             </div>
             {!projectsCollapsed && snapshot.projects.map((project) => (
